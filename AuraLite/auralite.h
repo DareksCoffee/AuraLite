@@ -1,3 +1,13 @@
+/*
+A LightWeight WAV sound player.
+
+
+Contributors:
+    - Darek (Main Developer)
+    - My cat Pichu (Emotional Support)
+*/
+
+
 #ifndef AURALITE_H
 #define AURALITE_H
 
@@ -124,6 +134,20 @@ void Auralite_Play(AuraLite* sound) {
     #endif
     }
     
+double Auralite_GetCurrentTime(AuraLite* sound) {
+    return (double)sound->position / (sound->sampleRate * sound->channels * (sound->bitsPerSample / 8));
+}
+
+void Auralite_Jump(AuraLite* sound, double seconds) {
+
+    uint32_t bytePosition = (uint32_t)(seconds * sound->sampleRate * sound->channels * (sound->bitsPerSample / 8));
+
+    if (bytePosition >= sound->length) {
+        sound->position = sound->length; 
+    } else {
+        sound->position = bytePosition;
+    }
+}
 
 void Auralite_Close() {
     waveOutUnprepareHeader(hWaveOut, &waveHeader, sizeof(WAVEHDR));
@@ -153,6 +177,10 @@ void Auralite_Init(AuraLite* sound) {
 void Auralite_Play(AuraLite* sound) {
     int frames = sound->length / (CHANNELS * (BITS_PER_SAMPLE / 8));
     snd_pcm_writei(pcm_handle, sound->data, frames);
+}
+
+double Auralite_GetCurrentTime(AuraLite* sound) {
+    return (double)sound->position / (sound->sampleRate * sound->channels * (sound->bitsPerSample / 8));
 }
 
 void Auralite_Close() {
@@ -200,6 +228,9 @@ void Auralite_Play(AuraLite* sound) {
     AudioQueueStart(audioQueue, NULL);
 }
 
+double Auralite_GetCurrentTime(AuraLite* sound) {
+    return (double)sound->position / (sound->sampleRate * sound->channels * (sound->bitsPerSample / 8));
+}
 void Auralite_Close() {
     AudioQueueStop(audioQueue, true);
     AudioQueueDispose(audioQueue, true);
