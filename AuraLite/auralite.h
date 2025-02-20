@@ -32,9 +32,9 @@ typedef struct {
     uint32_t sampleRate;
     uint16_t channels;
     uint16_t bitsPerSample;
-} Auralite;
+} AuraLite;
 
-Auralite load_wav(const char* filename) {
+AuraLite load_wav(const char* filename) {
     FILE* file = fopen(filename, "rb");
     if (!file) {
         printf("Failed to open file: %s\n", filename);
@@ -51,7 +51,7 @@ Auralite load_wav(const char* filename) {
 
     fseek(file, 22, SEEK_SET);
     
-    Auralite sound;
+    AuraLite sound;
     fread(&sound.channels, sizeof(uint16_t), 1, file);       
     fread(&sound.sampleRate, sizeof(uint32_t), 1, file);     
 
@@ -83,7 +83,7 @@ Auralite load_wav(const char* filename) {
 HWAVEOUT hWaveOut;
 WAVEHDR waveHeader;
 
-void Auralite_Init(Auralite* sound) {
+void Auralite_Init(AuraLite* sound) {
     WAVEFORMATEX waveFormat = {0};
     waveFormat.wFormatTag = WAVE_FORMAT_PCM;
     waveFormat.nChannels = sound->channels;
@@ -98,14 +98,32 @@ void Auralite_Init(Auralite* sound) {
     }
 }
 
-void Auralite_Play(Auralite* sound) {
-    memset(&waveHeader, 0, sizeof(WAVEHDR));
-    waveHeader.lpData = (LPSTR)sound->data;
-    waveHeader.dwBufferLength = sound->length;
+void Auralite_Play(AuraLite* sound) {
+    #ifdef _WIN32
+        memset(&waveHeader, 0, sizeof(WAVEHDR));
+        waveHeader.lpData = (LPSTR)sound->data;
+        waveHeader.dwBufferLength = sound->length;
     
-    waveOutPrepareHeader(hWaveOut, &waveHeader, sizeof(WAVEHDR));
-    waveOutWrite(hWaveOut, &waveHeader, sizeof(WAVEHDR));
-}
+        waveOutPrepareHeader(hWaveOut, &waveHeader, sizeof(WAVEHDR));
+        waveOutWrite(hWaveOut, &waveHeader, sizeof(WAVEHDR));
+    
+        Sleep((sound->length * 1000) / (sound->sampleRate * sound->channels * (sound->bitsPerSample / 8)));
+    
+    #elif __linux__
+        int frames = sound->length / (CHANNELS * (BITS_PER_SAMPLE / 8));
+        snd_pcm_writei(pcm_handle, sound->data, frames);
+    
+        sleep((sound->length * 1000) / (sound->sampleRate * sound->channels * (sound->bitsPerSample / 8)) / 1000);
+    
+    #elif __APPLE__
+        Auralite_AudioCallback(sound, audioQueue, audioBuffer);
+        AudioQueueStart(audioQueue, NULL);
+    
+        sleep((sound->length * 1000) / (sound->sampleRate * sound->channels * (sound->bitsPerSample / 8)) / 1000);
+    
+    #endif
+    }
+    
 
 void Auralite_Close() {
     waveOutUnprepareHeader(hWaveOut, &waveHeader, sizeof(WAVEHDR));
@@ -116,7 +134,7 @@ void Auralite_Close() {
 snd_pcm_t *pcm_handle;
 snd_pcm_hw_params_t *params;
 
-void Auralite_Init(Auralite* sound) {
+void Auralite_Init(AuraLite* sound) {
     if (snd_pcm_open(&pcm_handle, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0) {
         printf("Failed to open ALSA device\n");
         exit(1);
@@ -132,7 +150,7 @@ void Auralite_Init(Auralite* sound) {
     snd_pcm_hw_params(pcm_handle, params);
 }
 
-void Auralite_Play(Auralite* sound) {
+void Auralite_Play(AuraLite* sound) {
     int frames = sound->length / (CHANNELS * (BITS_PER_SAMPLE / 8));
     snd_pcm_writei(pcm_handle, sound->data, frames);
 }
@@ -147,7 +165,7 @@ AudioQueueRef audioQueue;
 AudioQueueBufferRef audioBuffer;
 
 void Auralite_AudioCallback(void* userdata, AudioQueueRef queue, AudioQueueBufferRef buffer) {
-    Auralite* sound = (Auralite*)userdata;
+    AuraLite* sound = (AuraLite*)userdata;
 
     if (sound->position + buffer->mAudioDataBytesCapacity > sound->length) {
         buffer->mAudioDataByteSize = sound->length - sound->position;
@@ -161,7 +179,7 @@ void Auralite_AudioCallback(void* userdata, AudioQueueRef queue, AudioQueueBuffe
     AudioQueueEnqueueBuffer(queue, buffer, 0, NULL);
 }
 
-void Auralite_Init(Auralite* sound) {
+void Auralite_Init(AuraLite* sound) {
     AudioStreamBasicDescription format = {0};
     format.mSampleRate = SAMPLE_RATE;
     format.mFormatID = kAudioFormatLinearPCM;
@@ -177,7 +195,7 @@ void Auralite_Init(Auralite* sound) {
     AudioQueueAllocateBuffer(audioQueue, 4096, &audioBuffer);
 }
 
-void Auralite_Play(Auralite* sound) {
+void Auralite_Play(AuraLite* sound) {
     Auralite_AudioCallback(sound, audioQueue, audioBuffer);
     AudioQueueStart(audioQueue, NULL);
 }
